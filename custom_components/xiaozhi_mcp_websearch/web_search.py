@@ -219,6 +219,8 @@ async def _bocha_ai_search(
         return {"results": [], "debug": debug}
 
     raw_results = _extract_bocha_result_items(data)
+    if not raw_results:
+        raw_results = _extract_bocha_message_fallback_items(data.get("messages", []))
     cleaned: list[dict[str, Any]] = []
     for item in raw_results[:limit]:
         result = _clean_result(
@@ -285,15 +287,48 @@ def _extract_bocha_message_content_items(messages: Any) -> list[dict[str, Any]]:
     return items
 
 
+def _extract_bocha_message_fallback_items(messages: Any) -> list[dict[str, Any]]:
+    if not isinstance(messages, list):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        parsed = _parse_json_value(content)
+        content_text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+        fallback = {
+            "title": message.get("content_type") or message.get("type") or "Bocha AI Search result",
+            "url": "",
+            "summary": content_text[:1200],
+            "source": "bocha",
+            "content_type": message.get("content_type"),
+            "raw": {
+                "role": message.get("role"),
+                "type": message.get("type"),
+                "content_type": message.get("content_type"),
+                "content": parsed if parsed is not None else content_text[:1200],
+            },
+        }
+        items.append(fallback)
+    return items
+
+
 def _parse_json_value(value: Any) -> Any:
     if isinstance(value, (dict, list)):
         return value
     if not isinstance(value, str) or not value.strip():
         return None
+    text = value.strip()
     try:
-        parsed = json.loads(value)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
         return None
+    if isinstance(parsed, str) and parsed != text:
+        nested = _parse_json_value(parsed)
+        if nested is not None:
+            return nested
     return parsed if isinstance(parsed, (dict, list)) else None
 
 
@@ -313,10 +348,20 @@ def _extract_items_from_json_value(value: Any) -> list[dict[str, Any]]:
         value.get("webpages", {}).get("value"),
         value.get("results"),
         value.get("cards"),
+        value.get("data"),
     )
     for candidate in candidates:
         if isinstance(candidate, list):
             return [item for item in candidate if isinstance(item, dict)]
+        if isinstance(candidate, str):
+            nested = _parse_json_value(candidate)
+            nested_items = _extract_items_from_json_value(nested)
+            if nested_items:
+                return nested_items
+        if isinstance(candidate, dict):
+            nested_items = _extract_items_from_json_value(candidate)
+            if nested_items:
+                return nested_items
     return []
 
 
