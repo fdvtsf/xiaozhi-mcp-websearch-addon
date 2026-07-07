@@ -1,0 +1,60 @@
+name: Xiaozhi MCP WebSearch
+version: "0.1.0"
+slug: xiaozhi_mcp_websearch
+description: Web search and URL fetch MCP tools for Xiaozhi / Jarvis Gateway
+url: https://github.com/example/xiaozhi-mcp-websearch-addon
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+host_network: false
+ports:
+  8765/tcp: 8765
+ports_description:
+  8765/tcp: HTTP tool API
+map:
+  - addon_config:rw
+options:
+  mode: "mcp_http"
+  host: "0.0.0.0"
+  port: 8765
+  public_base_url: ""
+  xiaozhi_ws_endpoint: ""
+  xiaozhi_ws_reconnect_seconds: 10
+  xiaozhi_ws_heartbeat_seconds: 50
+  search_provider: "mock"
+  bocha_api_key: ""
+  bocha_base_url: "https://api.bochaai.com/v1/web-search"
+  baidu_qianfan_api_key: ""
+  baidu_qianfan_base_url: "https://qianfan.baidubce.com/v2/ai_search/web_search"
+  baidu_qianfan_edition: "lite"
+  searxng_base_url: ""
+  brave_api_key: ""
+  max_search_results: 5
+  fetch_timeout_seconds: 10
+  max_fetch_chars: 12000
+  safe_mode: true
+  log_level: "info"
+schema:
+  mode: list(mcp_http|mcp_sse|xiaozhi_ws)
+  host: str
+  port: port
+  public_base_url: str?
+  xiaozhi_ws_endpoint: password?
+  xiaozhi_ws_reconnect_seconds: int
+  xiaozhi_ws_heartbeat_seconds: int
+  search_provider: list(mock|bocha|baidu_qianfan|searxng|brave)
+  bocha_api_key: password?
+  bocha_base_url: str
+  baidu_qianfan_api_key: password?
+  baidu_qianfan_base_url: str
+  baidu_qianfan_edition: list(lite|standard)
+  searxng_base_url: str?
+  brave_api_key: password?
+  max_search_results: int
+  fetch_timeout_seconds: int
+  max_fetch_chars: int
+  safe_mode: bool
+  log_level: list(debug|info|warning|error)
