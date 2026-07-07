@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Xiaozhi MCP WebSearch",
+        "description": "配置小智 MCP WebSocket 接入点和搜索源。",
+        "data": {
+          "xiaozhi_ws_endpoint": "小智 MCP WebSocket 接入点",
+          "xiaozhi_ws_reconnect_seconds": "断线重连间隔（秒）",
+          "xiaozhi_ws_heartbeat_seconds": "心跳间隔（秒）",
+          "search_provider": "搜索源",
+          "bocha_api_key": "Bocha API Key",
+          "bocha_base_url": "Bocha 接口地址",
+          "baidu_qianfan_api_key": "百度千帆 AppBuilder API Key",
+          "baidu_qianfan_base_url": "百度千帆接口地址",
+          "baidu_qianfan_edition": "百度千帆版本",
+          "searxng_base_url": "SearxNG 地址",
+          "brave_api_key": "Brave API Key",
+          "max_search_results": "最多搜索结果数",
+          "fetch_timeout_seconds": "抓取超时（秒）",
+          "max_fetch_chars": "最多返回字符数",
+          "safe_mode": "安全模式",
+          "log_level": "日志级别"
+        }
+      }
+    },
+    "error": {
+      "invalid_ws_endpoint": "接入点必须以 ws:// 或 wss:// 开头，并包含主机名。"
+    },
+    "abort": {
+      "already_configured": "Xiaozhi MCP WebSearch 已经配置。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xiaozhi MCP WebSearch 选项",
+        "description": "更新 Xiaozhi MCP WebSearch 配置。"
+      }
+    }
+  }
+}
+

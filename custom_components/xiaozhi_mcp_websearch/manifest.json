@@ -1,0 +1,15 @@
+{
+  "domain": "xiaozhi_mcp_websearch",
+  "name": "Xiaozhi MCP WebSearch",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/fdvtsf/xiaozhi-mcp-websearch-addon",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/fdvtsf/xiaozhi-mcp-websearch-addon/issues",
+  "requirements": [
+    "mcp==1.14.1",
+    "beautifulsoup4==4.12.3"
+  ],
+  "version": "0.2.0"
+}
+

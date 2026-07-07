@@ -2,6 +2,12 @@
 
 本文说明如何把 `Xiaozhi MCP WebSearch Add-on` 添加到 Home Assistant，并配置给小智使用。
 
+如果你的 HAOS 只剩 100 多 MB 空间，优先不要使用本文的 Add-on 方式。请改用更轻量的自定义集成版：
+
+[custom-component-install-cn.md](custom-component-install-cn.md)
+
+Add-on 会触发 Supervisor Docker build，需要更多磁盘空间；自定义集成版不需要 Docker build。
+
 ## 1. 当前能力说明
 
 这个 Add-on 只负责联网搜索能力：
@@ -364,4 +370,3 @@ search_provider: mock
 8. 在小智侧测试 `web_search` / `fetch_url`
 
 这样如果出问题，可以快速判断是 Add-on 启动问题、搜索 API 问题，还是小智 WebSocket 连接问题。
-

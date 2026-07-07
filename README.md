@@ -1,8 +1,15 @@
-# Xiaozhi MCP WebSearch Add-on
+# Xiaozhi MCP WebSearch
 
-Home Assistant add-on repository for **Xiaozhi MCP WebSearch**.
+Home Assistant WebSearch MCP tools for Xiaozhi / Jarvis Gateway.
 
-Current first version only implements web search tools. It does not control Home Assistant devices.
+This repository now provides two install shapes:
+
+- **Recommended for low disk space:** Home Assistant custom integration in `custom_components/xiaozhi_mcp_websearch`
+- **Optional legacy shape:** Home Assistant Add-on in `xiaozhi_mcp_websearch`
+
+The custom integration does not use Docker build and is closer to `ha-mcp-for-xiaozhi`.
+
+Current version only implements web search tools. It does not control Home Assistant devices.
 
 Home Assistant device control should continue to use `xiaozhi-mcp-ha` or the official Home Assistant MCP Server. A later version can merge HA control and WebSearch into a unified Xiaozhi MCP Gateway.
 
@@ -41,6 +48,8 @@ Home Assistant device control should continue to use `xiaozhi-mcp-ha` or the off
 xiaozhi-mcp-websearch-addon/
 ├── repository.json
 ├── README.md
+├── custom_components/
+│   └── xiaozhi_mcp_websearch/
 ├── xiaozhi_mcp_websearch/
 │   ├── config.yaml
 │   ├── Dockerfile
@@ -52,7 +61,21 @@ xiaozhi-mcp-websearch-addon/
 └── docs/
 ```
 
+## Recommended: custom integration installation
+
+If HAOS has limited free disk space, use the custom integration version:
+
+1. Copy `custom_components/xiaozhi_mcp_websearch` to `/config/custom_components/xiaozhi_mcp_websearch`.
+2. Restart Home Assistant Core.
+3. Open **Settings > Devices & services > Add integration**.
+4. Search **Xiaozhi MCP WebSearch**.
+5. Fill the Xiaozhi MCP WebSocket endpoint and search provider settings.
+
+Chinese guide: [docs/custom-component-install-cn.md](docs/custom-component-install-cn.md)
+
 ## Home Assistant installation
+
+The Add-on version is still available, but it needs Docker build space and Docker Hub access.
 
 1. Publish or copy this folder as a Home Assistant add-on repository.
 2. In Home Assistant, open **Settings > Add-ons > Add-on Store**.

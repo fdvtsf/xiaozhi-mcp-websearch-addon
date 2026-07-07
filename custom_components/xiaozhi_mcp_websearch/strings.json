@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Xiaozhi MCP WebSearch",
+        "description": "Configure the Xiaozhi MCP WebSocket access point and search provider.",
+        "data": {
+          "xiaozhi_ws_endpoint": "Xiaozhi MCP WebSocket endpoint",
+          "xiaozhi_ws_reconnect_seconds": "Reconnect interval seconds",
+          "xiaozhi_ws_heartbeat_seconds": "Heartbeat interval seconds",
+          "search_provider": "Search provider",
+          "bocha_api_key": "Bocha API key",
+          "bocha_base_url": "Bocha base URL",
+          "baidu_qianfan_api_key": "Baidu Qianfan AppBuilder API key",
+          "baidu_qianfan_base_url": "Baidu Qianfan base URL",
+          "baidu_qianfan_edition": "Baidu Qianfan edition",
+          "searxng_base_url": "SearxNG base URL",
+          "brave_api_key": "Brave API key",
+          "max_search_results": "Max search results",
+          "fetch_timeout_seconds": "Fetch timeout seconds",
+          "max_fetch_chars": "Max fetch chars",
+          "safe_mode": "Safe mode",
+          "log_level": "Log level"
+        }
+      }
+    },
+    "error": {
+      "invalid_ws_endpoint": "The endpoint must start with ws:// or wss:// and include a hostname."
+    },
+    "abort": {
+      "already_configured": "Xiaozhi MCP WebSearch is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xiaozhi MCP WebSearch Options",
+        "description": "Update the Xiaozhi MCP WebSearch settings."
+      }
+    }
+  }
+}
+
