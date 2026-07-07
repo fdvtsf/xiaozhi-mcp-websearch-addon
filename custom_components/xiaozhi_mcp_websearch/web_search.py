@@ -16,7 +16,7 @@ from .models import Settings
 
 
 _LOGGER = logging.getLogger(__name__)
-BOCHA_AI_SEARCH_URL = "https://api.bochaai.com/v1/ai-search"
+BOCHA_AI_SEARCH_URL = "https://api.bocha.cn/v1/ai-search"
 
 
 class ToolError(ValueError):
@@ -278,23 +278,15 @@ def _extract_bocha_message_content_items(messages: Any) -> list[dict[str, Any]]:
         if not isinstance(message, dict):
             continue
         content = message.get("content")
-        parsed = _parse_json_object(content)
+        parsed = _parse_json_value(content)
         if parsed is None:
             continue
-        for candidate in (
-            parsed.get("value"),
-            parsed.get("webPages", {}).get("value"),
-            parsed.get("webpages", {}).get("value"),
-            parsed.get("results"),
-            parsed.get("cards"),
-        ):
-            if isinstance(candidate, list):
-                items.extend(item for item in candidate if isinstance(item, dict))
+        items.extend(_extract_items_from_json_value(parsed))
     return items
 
 
-def _parse_json_object(value: Any) -> dict[str, Any] | None:
-    if isinstance(value, dict):
+def _parse_json_value(value: Any) -> Any:
+    if isinstance(value, (dict, list)):
         return value
     if not isinstance(value, str) or not value.strip():
         return None
@@ -302,7 +294,30 @@ def _parse_json_object(value: Any) -> dict[str, Any] | None:
         parsed = json.loads(value)
     except json.JSONDecodeError:
         return None
-    return parsed if isinstance(parsed, dict) else None
+    return parsed if isinstance(parsed, (dict, list)) else None
+
+
+def _extract_items_from_json_value(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        items: list[dict[str, Any]] = []
+        for item in value:
+            if isinstance(item, dict):
+                nested = _extract_items_from_json_value(item)
+                items.extend(nested or [item])
+        return items
+    if not isinstance(value, dict):
+        return []
+    candidates = (
+        value.get("value"),
+        value.get("webPages", {}).get("value"),
+        value.get("webpages", {}).get("value"),
+        value.get("results"),
+        value.get("cards"),
+    )
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+    return []
 
 
 async def _baidu_qianfan_search(
