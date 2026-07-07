@@ -73,6 +73,8 @@ async def ai_web_search(hass: HomeAssistant, query: str, count: int | None, sett
     normalized_query = (query or "").strip()
     if not normalized_query:
         raise ToolError("query is required")
+    if settings.search_provider != "bocha":
+        raise ToolError("ai_web_search requires search_provider=bocha. Use web_search for this configuration.")
     if not _looks_like_ai_search_query(normalized_query):
         raise ToolError("ai_web_search is for structured realtime facts. Use web_search for normal web/news/tutorial searches.")
 

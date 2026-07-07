@@ -19,7 +19,7 @@ def create_mcp_server(hass: HomeAssistant, settings: Settings):
 
     @server.list_tools()
     async def list_mcp_tools() -> list[Any]:
-        return [
+        tools = [
             types.Tool(
                 name="web_search",
                 description=(
@@ -29,19 +29,24 @@ def create_mcp_server(hass: HomeAssistant, settings: Settings):
                 inputSchema=WEB_SEARCH_SCHEMA,
             ),
             types.Tool(
-                name="ai_web_search",
-                description=(
-                    "高成本 AI 搜索工具。仅在用户明确询问实时股价、涨跌幅、天气、汇率、油价、百科卡、"
-                    "手机/汽车参数等结构化信息时使用。不要用于普通新闻、教程、原因分析。"
-                ),
-                inputSchema=AI_WEB_SEARCH_SCHEMA,
-            ),
-            types.Tool(
                 name="fetch_url",
                 description="Fetch and extract text from a public HTTP/HTTPS URL with safe-mode restrictions.",
                 inputSchema=FETCH_URL_SCHEMA,
             ),
         ]
+        if settings.search_provider == "bocha" and settings.bocha_api_key:
+            tools.insert(
+                1,
+                types.Tool(
+                    name="ai_web_search",
+                    description=(
+                        "高成本 AI 搜索工具。仅在用户明确询问实时股价、涨跌幅、天气、汇率、油价、百科卡、"
+                        "手机/汽车参数等结构化信息时使用。不要用于普通新闻、教程、原因分析。"
+                    ),
+                    inputSchema=AI_WEB_SEARCH_SCHEMA,
+                ),
+            )
+        return tools
 
     @server.call_tool()
     async def call_mcp_tool(name: str, arguments: dict[str, Any] | None) -> list[Any]:
