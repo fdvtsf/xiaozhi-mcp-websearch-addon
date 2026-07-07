@@ -193,7 +193,7 @@ async def _bocha_ai_search(
         "answer": False,
         "stream": False,
     }
-    status, response_preview, data = await _post_json_debug(
+    status, data = await _post_json_with_status(
         hass,
         "ai_web_search",
         BOCHA_AI_SEARCH_URL,
@@ -205,10 +205,8 @@ async def _bocha_ai_search(
     )
     debug = {
         "endpoint": BOCHA_AI_SEARCH_URL,
-        "query": query[:80],
         "count": limit,
         "http_status": status,
-        "response_text": response_preview,
     }
 
     if status != 200:
@@ -249,7 +247,6 @@ async def _bocha_ai_search(
                     "raw": data_payload,
                 }
             ],
-            "debug": debug,
         }
     return {"results": [], "debug": debug}
 
@@ -266,7 +263,46 @@ def _extract_bocha_result_items(data: dict[str, Any]) -> list[dict[str, Any]]:
     for candidate in candidates:
         if isinstance(candidate, list):
             return [item for item in candidate if isinstance(item, dict)]
+    message_items = _extract_bocha_message_content_items(data.get("messages", []))
+    if message_items:
+        return message_items
     return []
+
+
+def _extract_bocha_message_content_items(messages: Any) -> list[dict[str, Any]]:
+    if not isinstance(messages, list):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        parsed = _parse_json_object(content)
+        if parsed is None:
+            continue
+        for candidate in (
+            parsed.get("value"),
+            parsed.get("webPages", {}).get("value"),
+            parsed.get("webpages", {}).get("value"),
+            parsed.get("results"),
+            parsed.get("cards"),
+        ):
+            if isinstance(candidate, list):
+                items.extend(item for item in candidate if isinstance(item, dict))
+    return items
+
+
+def _parse_json_object(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 async def _baidu_qianfan_search(
@@ -418,7 +454,7 @@ async def _post_json(
     return data
 
 
-async def _post_json_debug(
+async def _post_json_with_status(
     hass: HomeAssistant,
     tool_name: str,
     url: str,
@@ -427,44 +463,42 @@ async def _post_json_debug(
     settings: Settings,
     query: str,
     count: int,
-) -> tuple[int, str, dict[str, Any] | None]:
+) -> tuple[int, dict[str, Any] | None]:
     started = time.perf_counter()
     session = async_get_clientsession(hass)
     timeout = ClientTimeout(total=settings.fetch_timeout_seconds)
     status = 0
-    response_text = ""
+    body = ""
     try:
         async with session.post(url, json=payload, headers=headers, timeout=timeout) as response:
             status = response.status
-            response_text = await response.text()
+            body = await response.text()
     except asyncio.TimeoutError as exc:
         raise ToolError("search provider request timed out") from exc
     except ClientError as exc:
         raise ToolError("search provider request failed") from exc
 
-    preview = response_text[:1000]
-    _LOGGER.debug(
-        "MCP debug tool=%s endpoint=%s query=%r count=%s http_status=%s response_text=%r",
-        tool_name,
-        url,
-        query[:80],
-        count,
-        status,
-        preview,
-    )
-
     data: dict[str, Any] | None = None
-    if response_text:
+    if body:
         try:
-            parsed = json.loads(response_text)
+            parsed = json.loads(body)
             if isinstance(parsed, dict):
                 data = parsed
         except json.JSONDecodeError:
             data = None
 
     result_count = len(_extract_bocha_result_items(data or {}))
+    _LOGGER.debug(
+        "MCP debug tool=%s endpoint=%s query=%r count=%s http_status=%s parsed_results=%s",
+        tool_name,
+        url,
+        query[:80],
+        count,
+        status,
+        result_count,
+    )
     _log_search_call(tool_name, query, count, result_count, started)
-    return status, preview, data
+    return status, data
 
 
 async def _get_json(
