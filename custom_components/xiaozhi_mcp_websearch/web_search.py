@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -82,13 +83,16 @@ async def ai_web_search(hass: HomeAssistant, query: str, count: int | None, sett
     if limit < 1:
         raise ToolError("count must be at least 1")
 
-    results = await _bocha_ai_search(hass, normalized_query, limit, settings)
-    return {
+    search_result = await _bocha_ai_search(hass, normalized_query, limit, settings)
+    payload = {
         "query": normalized_query,
         "tool": "ai_web_search",
         "provider": "bocha",
-        "results": results[: settings.max_search_results],
+        "results": search_result["results"][: settings.max_search_results],
     }
+    if search_result.get("debug"):
+        payload["debug"] = search_result["debug"]
+    return payload
 
 
 def _looks_like_ai_search_query(query: str) -> bool:
@@ -173,7 +177,7 @@ async def _bocha_ai_search(
     query: str,
     limit: int,
     settings: Settings,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     if not settings.bocha_api_key:
         raise ToolError("bocha_api_key is required for ai_web_search")
 
@@ -189,10 +193,32 @@ async def _bocha_ai_search(
         "answer": False,
         "stream": False,
     }
-    data = await _post_json(hass, "ai_web_search", BOCHA_AI_SEARCH_URL, headers, payload, settings, query, limit)
+    status, response_preview, data = await _post_json_debug(
+        hass,
+        "ai_web_search",
+        BOCHA_AI_SEARCH_URL,
+        headers,
+        payload,
+        settings,
+        query,
+        limit,
+    )
+    debug = {
+        "endpoint": BOCHA_AI_SEARCH_URL,
+        "query": query[:80],
+        "count": limit,
+        "http_status": status,
+        "response_text": response_preview,
+    }
+
+    if status != 200:
+        return {"results": [], "debug": debug}
+    if data is None:
+        return {"results": [], "debug": debug}
 
     if str(data.get("code", "200")) not in {"0", "200"}:
-        raise ToolError(str(data.get("msg") or data.get("message") or "bocha ai search failed"))
+        debug["provider_message"] = str(data.get("msg") or data.get("message") or "bocha ai search failed")
+        return {"results": [], "debug": debug}
 
     raw_results = _extract_bocha_result_items(data)
     cleaned: list[dict[str, Any]] = []
@@ -209,20 +235,23 @@ async def _bocha_ai_search(
         )
         cleaned.append(result)
     if cleaned:
-        return cleaned
+        return {"results": cleaned}
 
     data_payload = data.get("data", {})
     if data_payload:
-        return [
-            {
-                "title": "Bocha AI Search structured result",
-                "url": "",
-                "snippet": "",
-                "source": "bocha",
-                "raw": data_payload,
-            }
-        ]
-    return []
+        return {
+            "results": [
+                {
+                    "title": "Bocha AI Search structured result",
+                    "url": "",
+                    "snippet": "",
+                    "source": "bocha",
+                    "raw": data_payload,
+                }
+            ],
+            "debug": debug,
+        }
+    return {"results": [], "debug": debug}
 
 
 def _extract_bocha_result_items(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -387,6 +416,55 @@ async def _post_json(
 
     _log_search_call(tool_name, query, count, len(_extract_bocha_result_items(data)), started)
     return data
+
+
+async def _post_json_debug(
+    hass: HomeAssistant,
+    tool_name: str,
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    settings: Settings,
+    query: str,
+    count: int,
+) -> tuple[int, str, dict[str, Any] | None]:
+    started = time.perf_counter()
+    session = async_get_clientsession(hass)
+    timeout = ClientTimeout(total=settings.fetch_timeout_seconds)
+    status = 0
+    response_text = ""
+    try:
+        async with session.post(url, json=payload, headers=headers, timeout=timeout) as response:
+            status = response.status
+            response_text = await response.text()
+    except asyncio.TimeoutError as exc:
+        raise ToolError("search provider request timed out") from exc
+    except ClientError as exc:
+        raise ToolError("search provider request failed") from exc
+
+    preview = response_text[:1000]
+    _LOGGER.debug(
+        "MCP debug tool=%s endpoint=%s query=%r count=%s http_status=%s response_text=%r",
+        tool_name,
+        url,
+        query[:80],
+        count,
+        status,
+        preview,
+    )
+
+    data: dict[str, Any] | None = None
+    if response_text:
+        try:
+            parsed = json.loads(response_text)
+            if isinstance(parsed, dict):
+                data = parsed
+        except json.JSONDecodeError:
+            data = None
+
+    result_count = len(_extract_bocha_result_items(data or {}))
+    _log_search_call(tool_name, query, count, result_count, started)
+    return status, preview, data
 
 
 async def _get_json(
