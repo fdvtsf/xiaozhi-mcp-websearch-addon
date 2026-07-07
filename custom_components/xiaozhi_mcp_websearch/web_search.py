@@ -1,29 +1,44 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urljoin
 
-import httpx
+from aiohttp import ClientError, ClientTimeout
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .models import Settings
+
+
+_LOGGER = logging.getLogger(__name__)
+BOCHA_AI_SEARCH_URL = "https://api.bochaai.com/v1/ai-search"
 
 
 class ToolError(ValueError):
     pass
 
 
-def _clean_result(item: dict[str, Any], provider: str) -> dict[str, str | None]:
+def _clean_result(item: dict[str, Any], provider: str) -> dict[str, Any]:
     return {
         "title": str(item.get("title") or "Untitled").strip(),
         "url": str(item.get("url") or "").strip(),
         "snippet": str(item.get("snippet") or item.get("content") or item.get("description") or "").strip(),
         "source": str(item.get("source") or provider).strip(),
-        "published_at": item.get("published_at") or item.get("published") or None,
+        "raw": item.get("raw") or {},
     }
 
 
-async def search_web(query: str, count: int | None, language: str | None, settings: Settings) -> dict[str, Any]:
+async def search_web(
+    hass: HomeAssistant,
+    query: str,
+    count: int | None,
+    language: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
     normalized_query = (query or "").strip()
     if not normalized_query:
         raise ToolError("query is required")
@@ -36,21 +51,67 @@ async def search_web(query: str, count: int | None, language: str | None, settin
     if settings.search_provider == "mock":
         results = _mock_results(normalized_query, limit)
     elif settings.search_provider == "bocha":
-        results = await _bocha_search(normalized_query, limit, settings)
+        results = await _bocha_web_search(hass, normalized_query, limit, settings)
     elif settings.search_provider == "baidu_qianfan":
-        results = await _baidu_qianfan_search(normalized_query, limit, settings)
+        results = await _baidu_qianfan_search(hass, normalized_query, limit, settings)
     elif settings.search_provider == "searxng":
-        results = await _searxng_search(normalized_query, limit, lang, settings)
+        results = await _searxng_search(hass, normalized_query, limit, lang, settings)
     elif settings.search_provider == "brave":
-        results = await _brave_search(normalized_query, limit, lang, settings)
+        results = await _brave_search(hass, normalized_query, limit, lang, settings)
     else:
         raise ToolError(f"unsupported search provider: {settings.search_provider}")
 
     return {
         "query": normalized_query,
+        "tool": "web_search",
         "provider": settings.search_provider,
         "results": results[: settings.max_search_results],
     }
+
+
+async def ai_web_search(hass: HomeAssistant, query: str, count: int | None, settings: Settings) -> dict[str, Any]:
+    normalized_query = (query or "").strip()
+    if not normalized_query:
+        raise ToolError("query is required")
+    if not _looks_like_ai_search_query(normalized_query):
+        raise ToolError("ai_web_search is for structured realtime facts. Use web_search for normal web/news/tutorial searches.")
+
+    limit = min(count or settings.max_search_results, settings.max_search_results)
+    if limit < 1:
+        raise ToolError("count must be at least 1")
+
+    results = await _bocha_ai_search(hass, normalized_query, limit, settings)
+    return {
+        "query": normalized_query,
+        "tool": "ai_web_search",
+        "provider": "bocha",
+        "results": results[: settings.max_search_results],
+    }
+
+
+def _looks_like_ai_search_query(query: str) -> bool:
+    lowered = query.lower()
+    keywords = (
+        "当前股价",
+        "实时股价",
+        "股票价格",
+        "涨跌幅",
+        "实时行情",
+        "当前价格",
+        "天气",
+        "汇率",
+        "油价",
+        "百科",
+        "参数",
+        "配置",
+        "stock price",
+        "current price",
+        "weather",
+        "exchange rate",
+    )
+    if any(keyword in lowered for keyword in keywords):
+        return True
+    return any(code in lowered for code in ("01810.hk", "00700.hk", "nvda", "aapl", "tsla", "hk", ".hk"))
 
 
 def _mock_results(query: str, limit: int) -> list[dict[str, Any]]:
@@ -61,13 +122,18 @@ def _mock_results(query: str, limit: int) -> list[dict[str, Any]]:
             "url": f"https://example.com/search/{index + 1}",
             "snippet": "This is a deterministic mock search result for local testing.",
             "source": "mock",
-            "published_at": timestamp,
+            "raw": {"published_at": timestamp},
         }
         for index in range(limit)
     ]
 
 
-async def _bocha_search(query: str, limit: int, settings: Settings) -> list[dict[str, Any]]:
+async def _bocha_web_search(
+    hass: HomeAssistant,
+    query: str,
+    limit: int,
+    settings: Settings,
+) -> list[dict[str, Any]]:
     if not settings.bocha_api_key:
         raise ToolError("bocha_api_key is required when search_provider=bocha")
 
@@ -77,10 +143,7 @@ async def _bocha_search(query: str, limit: int, settings: Settings) -> list[dict
         "User-Agent": "xiaozhi-mcp-websearch/0.2.0",
     }
     payload = {"query": query, "count": limit, "summary": True}
-    async with httpx.AsyncClient(timeout=settings.fetch_timeout_seconds, headers=headers) as client:
-        response = await client.post(settings.bocha_base_url, json=payload)
-        response.raise_for_status()
-        data = response.json()
+    data = await _post_json(hass, "web_search", settings.bocha_base_url, headers, payload, settings, query, limit)
 
     if str(data.get("code", "200")) not in {"0", "200"}:
         raise ToolError(str(data.get("msg") or data.get("message") or "bocha search failed"))
@@ -94,7 +157,7 @@ async def _bocha_search(query: str, limit: int, settings: Settings) -> list[dict
                 "url": item.get("url"),
                 "snippet": item.get("summary") or item.get("snippet"),
                 "source": item.get("siteName") or item.get("displayUrl") or "bocha",
-                "published_at": item.get("dateLastCrawled") or item.get("datePublished"),
+                "raw": item,
             },
             "bocha",
         )
@@ -103,7 +166,84 @@ async def _bocha_search(query: str, limit: int, settings: Settings) -> list[dict
     return cleaned
 
 
-async def _baidu_qianfan_search(query: str, limit: int, settings: Settings) -> list[dict[str, Any]]:
+async def _bocha_ai_search(
+    hass: HomeAssistant,
+    query: str,
+    limit: int,
+    settings: Settings,
+) -> list[dict[str, Any]]:
+    if not settings.bocha_api_key:
+        raise ToolError("bocha_api_key is required for ai_web_search")
+
+    headers = {
+        "Authorization": f"Bearer {settings.bocha_api_key}",
+        "Content-Type": "application/json",
+        "User-Agent": "xiaozhi-mcp-websearch/0.2.0",
+    }
+    payload = {
+        "query": query,
+        "freshness": "noLimit",
+        "count": limit,
+        "answer": False,
+        "stream": False,
+    }
+    data = await _post_json(hass, "ai_web_search", BOCHA_AI_SEARCH_URL, headers, payload, settings, query, limit)
+
+    if str(data.get("code", "200")) not in {"0", "200"}:
+        raise ToolError(str(data.get("msg") or data.get("message") or "bocha ai search failed"))
+
+    raw_results = _extract_bocha_result_items(data)
+    cleaned: list[dict[str, Any]] = []
+    for item in raw_results[:limit]:
+        result = _clean_result(
+            {
+                "title": item.get("name") or item.get("title") or item.get("cardName") or item.get("type"),
+                "url": item.get("url") or item.get("link") or item.get("displayUrl") or "",
+                "snippet": item.get("summary") or item.get("snippet") or item.get("description") or item.get("content"),
+                "source": item.get("siteName") or item.get("displayUrl") or item.get("source") or "bocha",
+                "raw": item,
+            },
+            "bocha",
+        )
+        cleaned.append(result)
+    if cleaned:
+        return cleaned
+
+    data_payload = data.get("data", {})
+    if data_payload:
+        return [
+            {
+                "title": "Bocha AI Search structured result",
+                "url": "",
+                "snippet": "",
+                "source": "bocha",
+                "raw": data_payload,
+            }
+        ]
+    return []
+
+
+def _extract_bocha_result_items(data: dict[str, Any]) -> list[dict[str, Any]]:
+    payload = data.get("data", {})
+    candidates = [
+        payload.get("webPages", {}).get("value"),
+        payload.get("webpages", {}).get("value"),
+        payload.get("results"),
+        payload.get("cards"),
+        payload.get("value"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+    return []
+
+
+async def _baidu_qianfan_search(
+    hass: HomeAssistant,
+    query: str,
+    limit: int,
+    settings: Settings,
+) -> list[dict[str, Any]]:
     if not settings.baidu_qianfan_api_key:
         raise ToolError("baidu_qianfan_api_key is required when search_provider=baidu_qianfan")
 
@@ -120,10 +260,16 @@ async def _baidu_qianfan_search(query: str, limit: int, settings: Settings) -> l
         "safe_search": True,
     }
 
-    async with httpx.AsyncClient(timeout=settings.fetch_timeout_seconds, headers=headers) as client:
-        response = await client.post(settings.baidu_qianfan_base_url, json=payload)
-        response.raise_for_status()
-        data = response.json()
+    data = await _post_json(
+        hass,
+        "web_search",
+        settings.baidu_qianfan_base_url,
+        headers,
+        payload,
+        settings,
+        query,
+        limit,
+    )
 
     if data.get("code"):
         raise ToolError(str(data.get("message") or "baidu qianfan search failed"))
@@ -138,7 +284,7 @@ async def _baidu_qianfan_search(query: str, limit: int, settings: Settings) -> l
                 "url": item.get("url"),
                 "snippet": item.get("snippet") or item.get("content"),
                 "source": item.get("website") or item.get("web_anchor") or "baidu_qianfan",
-                "published_at": item.get("date"),
+                "raw": item,
             },
             "baidu_qianfan",
         )
@@ -147,28 +293,36 @@ async def _baidu_qianfan_search(query: str, limit: int, settings: Settings) -> l
     return cleaned
 
 
-async def _searxng_search(query: str, limit: int, language: str, settings: Settings) -> list[dict[str, Any]]:
+async def _searxng_search(
+    hass: HomeAssistant,
+    query: str,
+    limit: int,
+    language: str,
+    settings: Settings,
+) -> list[dict[str, Any]]:
     if not settings.searxng_base_url:
         raise ToolError("searxng_base_url is required when search_provider=searxng")
 
     endpoint = urljoin(settings.searxng_base_url.rstrip("/") + "/", "search")
     params = {"q": query, "format": "json", "language": language, "safesearch": 1}
     headers = {"User-Agent": "xiaozhi-mcp-websearch/0.2.0"}
-
-    async with httpx.AsyncClient(timeout=settings.fetch_timeout_seconds, headers=headers) as client:
-        response = await client.get(endpoint, params=params)
-        response.raise_for_status()
-        payload = response.json()
+    payload = await _get_json(hass, "web_search", endpoint, headers, params, settings, query, limit)
 
     cleaned: list[dict[str, Any]] = []
     for item in payload.get("results", [])[:limit]:
-        result = _clean_result(item, "searxng")
+        result = _clean_result({**item, "raw": item}, "searxng")
         if result["url"]:
             cleaned.append(result)
     return cleaned
 
 
-async def _brave_search(query: str, limit: int, language: str, settings: Settings) -> list[dict[str, Any]]:
+async def _brave_search(
+    hass: HomeAssistant,
+    query: str,
+    limit: int,
+    language: str,
+    settings: Settings,
+) -> list[dict[str, Any]]:
     if not settings.brave_api_key:
         raise ToolError("brave_api_key is required when search_provider=brave")
 
@@ -178,11 +332,16 @@ async def _brave_search(query: str, limit: int, language: str, settings: Setting
         "X-Subscription-Token": settings.brave_api_key,
     }
     params = {"q": query, "count": limit, "search_lang": language.split("-")[0]}
-
-    async with httpx.AsyncClient(timeout=settings.fetch_timeout_seconds, headers=headers) as client:
-        response = await client.get("https://api.search.brave.com/res/v1/web/search", params=params)
-        response.raise_for_status()
-        payload = response.json()
+    payload = await _get_json(
+        hass,
+        "web_search",
+        "https://api.search.brave.com/res/v1/web/search",
+        headers,
+        params,
+        settings,
+        query,
+        limit,
+    )
 
     cleaned: list[dict[str, Any]] = []
     for item in payload.get("web", {}).get("results", [])[:limit]:
@@ -192,7 +351,7 @@ async def _brave_search(query: str, limit: int, language: str, settings: Setting
                 "url": item.get("url"),
                 "snippet": item.get("description"),
                 "source": item.get("profile", {}).get("name") or "brave",
-                "published_at": item.get("age"),
+                "raw": item,
             },
             "brave",
         )
@@ -200,3 +359,68 @@ async def _brave_search(query: str, limit: int, language: str, settings: Setting
             cleaned.append(result)
     return cleaned
 
+
+async def _post_json(
+    hass: HomeAssistant,
+    tool_name: str,
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    settings: Settings,
+    query: str,
+    count: int,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    session = async_get_clientsession(hass)
+    timeout = ClientTimeout(total=settings.fetch_timeout_seconds)
+    try:
+        async with session.post(url, json=payload, headers=headers, timeout=timeout) as response:
+            if response.status >= 400:
+                raise ToolError(f"search provider returned HTTP {response.status}")
+            data = await response.json(content_type=None)
+    except asyncio.TimeoutError as exc:
+        raise ToolError("search provider request timed out") from exc
+    except ClientError as exc:
+        raise ToolError("search provider request failed") from exc
+
+    _log_search_call(tool_name, query, count, len(_extract_bocha_result_items(data)), started)
+    return data
+
+
+async def _get_json(
+    hass: HomeAssistant,
+    tool_name: str,
+    url: str,
+    headers: dict[str, str],
+    params: dict[str, Any],
+    settings: Settings,
+    query: str,
+    count: int,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    session = async_get_clientsession(hass)
+    timeout = ClientTimeout(total=settings.fetch_timeout_seconds)
+    try:
+        async with session.get(url, params=params, headers=headers, timeout=timeout) as response:
+            if response.status >= 400:
+                raise ToolError(f"search provider returned HTTP {response.status}")
+            data = await response.json(content_type=None)
+    except asyncio.TimeoutError as exc:
+        raise ToolError("search provider request timed out") from exc
+    except ClientError as exc:
+        raise ToolError("search provider request failed") from exc
+
+    result_count = len(data.get("results", [])) or len(data.get("web", {}).get("results", []))
+    _log_search_call(tool_name, query, count, result_count, started)
+    return data
+
+
+def _log_search_call(tool_name: str, query: str, count: int, result_count: int, started: float) -> None:
+    _LOGGER.info(
+        "MCP tool=%s query=%r count=%s results=%s elapsed_ms=%s",
+        tool_name,
+        query[:80],
+        count,
+        result_count,
+        int((time.perf_counter() - started) * 1000),
+    )

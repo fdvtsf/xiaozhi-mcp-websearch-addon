@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import urljoin
 
-import httpx
+from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 from bs4 import BeautifulSoup
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .models import Settings
 from .security import is_url_allowed, validate_http_url
@@ -30,7 +33,7 @@ BLOCKED_CONTENT_MARKERS = (
 )
 
 
-async def fetch_url_text(url: str, max_chars: int | None, settings: Settings) -> dict[str, Any]:
+async def fetch_url_text(hass: HomeAssistant, url: str, max_chars: int | None, settings: Settings) -> dict[str, Any]:
     current_url = validate_http_url(url)
     if not is_url_allowed(current_url, settings.safe_mode):
         raise ToolError("url is blocked by safe_mode")
@@ -40,16 +43,18 @@ async def fetch_url_text(url: str, max_chars: int | None, settings: Settings) ->
         raise ToolError("max_chars must be at least 1")
 
     headers = {"User-Agent": "xiaozhi-mcp-websearch/0.2.0"}
-    async with httpx.AsyncClient(
-        timeout=httpx.Timeout(settings.fetch_timeout_seconds),
+    session = async_get_clientsession(hass)
+    response, final_url, raw = await _request_with_checked_redirects(
+        session=session,
+        url=current_url,
+        safe_mode=settings.safe_mode,
         headers=headers,
-        follow_redirects=False,
-    ) as client:
-        response = await _request_with_checked_redirects(client, current_url, settings.safe_mode)
-        content_type = response.headers.get("content-type", "").split(";")[0].lower().strip()
-        if not _is_supported_content_type(content_type):
-            raise ToolError(f"unsupported content-type: {content_type or 'unknown'}")
-        raw = await _read_limited(response, max_bytes=max(char_limit * 4, 65536))
+        timeout_seconds=settings.fetch_timeout_seconds,
+        max_bytes=max(char_limit * 4, 65536),
+    )
+    content_type = response.headers.get("content-type", "").split(";")[0].lower().strip()
+    if not _is_supported_content_type(content_type):
+        raise ToolError(f"unsupported content-type: {content_type or 'unknown'}")
 
     text, title = _extract_text(raw, content_type)
     truncated = len(text) > char_limit
@@ -57,7 +62,7 @@ async def fetch_url_text(url: str, max_chars: int | None, settings: Settings) ->
         text = text[:char_limit]
 
     return {
-        "url": str(response.url),
+        "url": final_url,
         "title": title,
         "text": text,
         "content_type": content_type,
@@ -66,21 +71,35 @@ async def fetch_url_text(url: str, max_chars: int | None, settings: Settings) ->
 
 
 async def _request_with_checked_redirects(
-    client: httpx.AsyncClient,
+    session: ClientSession,
     url: str,
     safe_mode: bool,
+    headers: dict[str, str],
+    timeout_seconds: int,
+    max_bytes: int,
     max_redirects: int = 5,
-) -> httpx.Response:
+) -> tuple[ClientResponse, str, bytes]:
     current = url
     for _ in range(max_redirects + 1):
         if not is_url_allowed(current, safe_mode):
             raise ToolError("redirect target is blocked by safe_mode")
-        response = await client.get(current)
-        if response.status_code not in {301, 302, 303, 307, 308}:
-            response.raise_for_status()
-            return response
+        timeout = ClientTimeout(total=timeout_seconds)
+        try:
+            response = await session.get(current, headers=headers, timeout=timeout, allow_redirects=False)
+        except asyncio.TimeoutError as exc:
+            raise ToolError("fetch request timed out") from exc
+        except ClientError as exc:
+            raise ToolError("fetch request failed") from exc
+
+        if response.status not in {301, 302, 303, 307, 308}:
+            if response.status >= 400:
+                response.release()
+                raise ToolError(f"fetch returned HTTP {response.status}")
+            raw = await _read_limited(response, max_bytes=max_bytes)
+            return response, str(response.url), raw
 
         location = response.headers.get("location")
+        response.release()
         if not location:
             raise ToolError("redirect response missing Location header")
         current = urljoin(current, location)
@@ -88,13 +107,13 @@ async def _request_with_checked_redirects(
     raise ToolError("too many redirects")
 
 
-async def _read_limited(response: httpx.Response, max_bytes: int) -> bytes:
+async def _read_limited(response: ClientResponse, max_bytes: int) -> bytes:
     content_length = response.headers.get("content-length")
     if content_length and int(content_length) > max_bytes:
         raise ToolError("response is too large")
 
     data = bytearray()
-    async for chunk in response.aiter_bytes():
+    async for chunk in response.content.iter_chunked(16384):
         data.extend(chunk)
         if len(data) > max_bytes:
             raise ToolError("response is too large")
@@ -125,4 +144,3 @@ def _extract_text(raw: bytes, content_type: str) -> tuple[str, str]:
 
     lines = [line.strip() for line in text.splitlines()]
     return "\n".join(line for line in lines if line), title
-

@@ -62,7 +62,7 @@ async def _async_run_once(
     from mcp.shared.message import SessionMessage
     from mcp.types import JSONRPCMessage
 
-    mcp_server, init_options = create_mcp_server(settings)
+    mcp_server, init_options = create_mcp_server(hass, settings)
     read_send, read_stream = anyio.create_memory_object_stream(0)
     write_stream, write_recv = anyio.create_memory_object_stream(0)
 
@@ -115,4 +115,3 @@ async def _websocket_heartbeat(websocket: ClientWebSocketResponse, interval_seco
 async def _stop_watcher(websocket: ClientWebSocketResponse, stop_event: asyncio.Event) -> None:
     await stop_event.wait()
     await websocket.close()
-

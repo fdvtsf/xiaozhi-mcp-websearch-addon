@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from homeassistant.core import HomeAssistant
+
 from .const import VERSION
 from .models import Settings
-from .tools import FETCH_URL_SCHEMA, WEB_SEARCH_SCHEMA, call_tool
+from .tools import AI_WEB_SEARCH_SCHEMA, FETCH_URL_SCHEMA, WEB_SEARCH_SCHEMA, call_tool
 
 
-def create_mcp_server(settings: Settings):
+def create_mcp_server(hass: HomeAssistant, settings: Settings):
     from mcp.server import NotificationOptions, Server
     from mcp.server.models import InitializationOptions
     import mcp.types as types
@@ -20,8 +22,19 @@ def create_mcp_server(settings: Settings):
         return [
             types.Tool(
                 name="web_search",
-                description="Search the web using mock, Bocha, Baidu Qianfan Baidu Search, SearxNG, or Brave Search.",
+                description=(
+                    "低成本网页搜索工具。适合搜索新闻、网页、教程、公告、资料和原因分析。"
+                    "不适合查询实时股价、天气、汇率、油价等结构化实时信息。"
+                ),
                 inputSchema=WEB_SEARCH_SCHEMA,
+            ),
+            types.Tool(
+                name="ai_web_search",
+                description=(
+                    "高成本 AI 搜索工具。仅在用户明确询问实时股价、涨跌幅、天气、汇率、油价、百科卡、"
+                    "手机/汽车参数等结构化信息时使用。不要用于普通新闻、教程、原因分析。"
+                ),
+                inputSchema=AI_WEB_SEARCH_SCHEMA,
             ),
             types.Tool(
                 name="fetch_url",
@@ -32,7 +45,7 @@ def create_mcp_server(settings: Settings):
 
     @server.call_tool()
     async def call_mcp_tool(name: str, arguments: dict[str, Any] | None) -> list[Any]:
-        payload = await call_tool(name, arguments or {}, settings)
+        payload = await call_tool(hass, name, arguments or {}, settings)
         return [
             types.TextContent(
                 type="text",
@@ -49,4 +62,3 @@ def create_mcp_server(settings: Settings):
         ),
     )
     return server, init_options
-
