@@ -223,12 +223,13 @@ async def _bocha_ai_search(
         raw_results = _extract_bocha_message_fallback_items(data.get("messages", []))
     cleaned: list[dict[str, Any]] = []
     for item in raw_results[:limit]:
+        normalized = _normalize_bocha_ai_item(item)
         result = _clean_result(
             {
-                "title": item.get("name") or item.get("title") or item.get("cardName") or item.get("type"),
-                "url": item.get("url") or item.get("link") or item.get("displayUrl") or "",
-                "snippet": item.get("summary") or item.get("snippet") or item.get("description") or item.get("content"),
-                "source": item.get("siteName") or item.get("displayUrl") or item.get("source") or "bocha",
+                "title": normalized.get("title"),
+                "url": normalized.get("url"),
+                "snippet": normalized.get("snippet"),
+                "source": normalized.get("source"),
                 "raw": item,
             },
             "bocha",
@@ -251,6 +252,49 @@ async def _bocha_ai_search(
             ],
         }
     return {"results": [], "debug": debug}
+
+
+def _normalize_bocha_ai_item(item: dict[str, Any]) -> dict[str, Any]:
+    stock = _extract_stock_model_card(item)
+    if stock:
+        return stock
+    return {
+        "title": item.get("name") or item.get("title") or item.get("cardName") or item.get("type"),
+        "url": item.get("url") or item.get("link") or item.get("displayUrl") or "",
+        "snippet": item.get("summary") or item.get("snippet") or item.get("description") or item.get("content"),
+        "source": item.get("siteName") or item.get("displayUrl") or item.get("source") or "bocha",
+    }
+
+
+def _extract_stock_model_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    groups = item.get("modelCard", {}).get("group")
+    if not isinstance(groups, list) or not groups or not isinstance(groups[0], dict):
+        return None
+
+    stock = groups[0]
+    title = stock.get("name") or item.get("name") or "Bocha stock quote"
+    code = stock.get("code_stock")
+    exchange = stock.get("name_exchange")
+    fields = [
+        ("price", stock.get("price")),
+        ("time", stock.get("time")),
+        ("status", stock.get("key_status")),
+        ("open", stock.get("number_open")),
+        ("high", stock.get("number_high")),
+        ("low", stock.get("number_low")),
+        ("previous_close", stock.get("number_closed")),
+        ("market", stock.get("type")),
+    ]
+    snippet = ", ".join(f"{key}: {value}" for key, value in fields if value not in (None, ""))
+    if code or exchange:
+        title = f"{title} {code or ''}.{exchange or ''}".strip(".")
+
+    return {
+        "title": title,
+        "url": item.get("url") or item.get("displayUrl") or "",
+        "snippet": snippet,
+        "source": item.get("siteName") or exchange or "bocha",
+    }
 
 
 def _extract_bocha_result_items(data: dict[str, Any]) -> list[dict[str, Any]]:
