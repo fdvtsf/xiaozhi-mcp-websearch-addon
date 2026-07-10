@@ -12,7 +12,10 @@ from .const import (
     CONF_BOCHA_API_KEY,
     CONF_BOCHA_BASE_URL,
     CONF_BRAVE_API_KEY,
+    CONF_ENABLE_HA_TOOLS,
     CONF_FETCH_TIMEOUT_SECONDS,
+    CONF_HA_ASSISTANT,
+    CONF_HA_LLM_API,
     CONF_LOG_LEVEL,
     CONF_MAX_FETCH_CHARS,
     CONF_MAX_SEARCH_RESULTS,
@@ -62,6 +65,9 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Optional(CONF_MAX_FETCH_CHARS, default=values.get(CONF_MAX_FETCH_CHARS, 12000)): int,
             vol.Optional(CONF_SAFE_MODE, default=values.get(CONF_SAFE_MODE, True)): bool,
             vol.Optional(CONF_LOG_LEVEL, default=values.get(CONF_LOG_LEVEL, "info")): vol.In(LOG_LEVELS),
+            vol.Optional(CONF_ENABLE_HA_TOOLS, default=values.get(CONF_ENABLE_HA_TOOLS, False)): bool,
+            vol.Optional(CONF_HA_LLM_API, default=values.get(CONF_HA_LLM_API, "assist")): str,
+            vol.Optional(CONF_HA_ASSISTANT, default=values.get(CONF_HA_ASSISTANT, "conversation")): str,
         }
     )
 
@@ -115,4 +121,3 @@ class XiaozhiMcpWebSearchOptionsFlow(config_entries.OptionsFlow):
             data_schema=_schema(current),
             errors=errors,
         )
-

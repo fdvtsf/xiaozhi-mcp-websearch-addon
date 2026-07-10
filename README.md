@@ -9,9 +9,9 @@ This repository now provides two install shapes:
 
 The custom integration does not use Docker build and is closer to `ha-mcp-for-xiaozhi`.
 
-Current version only implements web search tools. It does not control Home Assistant devices.
+Current custom integration implements web search tools and can optionally expose Home Assistant Assist/LLM tools through the same Xiaozhi MCP WebSocket connection. Home Assistant tools are disabled by default and must be explicitly enabled in the integration options.
 
-Home Assistant device control should continue to use `xiaozhi-mcp-ha` or the official Home Assistant MCP Server. A later version can merge HA control and WebSearch into a unified Xiaozhi MCP Gateway.
+The Home Assistant tool bridge follows the same direction as `ha-mcp-for-xiaozhi`: it reuses Home Assistant's official Assist/LLM API instead of reimplementing entity and service-control logic.
 
 ## Current capabilities
 
@@ -33,11 +33,25 @@ Home Assistant device control should continue to use `xiaozhi-mcp-ha` or the off
 - Xiaozhi WebSocket MCP mode:
   - outbound connection to the Xiaozhi MCP access-point URL
   - MCP JSON-RPC over WebSocket, following `ha-mcp-for-xiaozhi`
+- Optional Home Assistant Assist/LLM tools:
+  - disabled by default
+  - dynamically exposed from Home Assistant's official Assist/LLM API
+  - intended to provide the HA-control side of a unified Xiaozhi MCP Gateway
 
-## Not supported in v0.1.0
+## Home Assistant Tools
 
-- Home Assistant entity/device control
-- Home Assistant API access
+To expose Home Assistant device/control tools to Xiaozhi:
+
+1. Open **Settings > Devices & services > Xiaozhi MCP WebSearch > Configure**.
+2. Enable **Home Assistant tools**.
+3. Keep `ha_llm_api` as `assist` unless your HA instance uses another LLM API id.
+4. Keep `ha_assistant` as `conversation` unless your exposed entities are scoped to another assistant id.
+5. Restart the integration or Home Assistant Core.
+
+When enabled, the integration dynamically lists tools from Home Assistant's official Assist/LLM API and adds them next to `web_search`, `ai_web_search`, and `fetch_url`.
+
+## Not supported in v0.3.0
+
 - Supervisor API access
 - Inbound standard MCP Streamable HTTP or SSE transport
 - Binary document download, PDF extraction, image/video/archive extraction

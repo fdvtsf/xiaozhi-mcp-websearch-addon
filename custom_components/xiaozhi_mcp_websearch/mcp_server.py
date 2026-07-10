@@ -6,8 +6,11 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from .const import VERSION
+from .ha_tools import async_call_ha_tool, async_list_ha_tools
 from .models import Settings
 from .tools import AI_WEB_SEARCH_SCHEMA, FETCH_URL_SCHEMA, WEB_SEARCH_SCHEMA, call_tool
+
+LOCAL_TOOL_NAMES = {"web_search", "ai_web_search", "fetch_url"}
 
 
 def create_mcp_server(hass: HomeAssistant, settings: Settings):
@@ -46,15 +49,19 @@ def create_mcp_server(hass: HomeAssistant, settings: Settings):
                     inputSchema=AI_WEB_SEARCH_SCHEMA,
                 ),
             )
+        tools.extend(await async_list_ha_tools(hass, settings, types.Tool))
         return tools
 
     @server.call_tool()
     async def call_mcp_tool(name: str, arguments: dict[str, Any] | None) -> list[Any]:
-        payload = await call_tool(hass, name, arguments or {}, settings)
+        if name in LOCAL_TOOL_NAMES:
+            payload = await call_tool(hass, name, arguments or {}, settings)
+        else:
+            payload = await async_call_ha_tool(hass, name, arguments or {}, settings)
         return [
             types.TextContent(
                 type="text",
-                text=json.dumps(payload, ensure_ascii=False),
+                text=json.dumps(_json_safe(payload), ensure_ascii=False),
             )
         ]
 
@@ -67,3 +74,17 @@ def create_mcp_server(hass: HomeAssistant, settings: Settings):
         ),
     )
     return server, init_options
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return _json_safe(value.model_dump())
+    if hasattr(value, "as_dict"):
+        return _json_safe(value.as_dict())
+    return str(value)

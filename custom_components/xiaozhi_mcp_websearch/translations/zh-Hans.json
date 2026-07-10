@@ -20,7 +20,10 @@
           "fetch_timeout_seconds": "抓取超时（秒）",
           "max_fetch_chars": "最多返回字符数",
           "safe_mode": "安全模式",
-          "log_level": "日志级别"
+          "log_level": "日志级别",
+          "enable_ha_tools": "启用 Home Assistant 工具",
+          "ha_llm_api": "Home Assistant LLM API ID",
+          "ha_assistant": "Home Assistant 助手 ID"
         }
       }
     },
@@ -40,4 +43,3 @@
     }
   }
 }
-

@@ -1,6 +1,6 @@
 DOMAIN = "xiaozhi_mcp_websearch"
 NAME = "Xiaozhi MCP WebSearch"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 CONF_XIAOZHI_WS_ENDPOINT = "xiaozhi_ws_endpoint"
 CONF_XIAOZHI_WS_RECONNECT_SECONDS = "xiaozhi_ws_reconnect_seconds"
@@ -18,6 +18,9 @@ CONF_FETCH_TIMEOUT_SECONDS = "fetch_timeout_seconds"
 CONF_MAX_FETCH_CHARS = "max_fetch_chars"
 CONF_SAFE_MODE = "safe_mode"
 CONF_LOG_LEVEL = "log_level"
+CONF_ENABLE_HA_TOOLS = "enable_ha_tools"
+CONF_HA_LLM_API = "ha_llm_api"
+CONF_HA_ASSISTANT = "ha_assistant"
 
 SEARCH_PROVIDERS = ["mock", "bocha", "baidu_qianfan", "searxng", "brave"]
 QIANFAN_EDITIONS = ["lite", "standard"]
@@ -35,5 +38,7 @@ DEFAULTS = {
     CONF_MAX_FETCH_CHARS: 12000,
     CONF_SAFE_MODE: True,
     CONF_LOG_LEVEL: "info",
+    CONF_ENABLE_HA_TOOLS: False,
+    CONF_HA_LLM_API: "assist",
+    CONF_HA_ASSISTANT: "conversation",
 }
-

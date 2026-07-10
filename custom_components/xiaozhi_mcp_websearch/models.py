@@ -10,7 +10,10 @@ from .const import (
     CONF_BOCHA_API_KEY,
     CONF_BOCHA_BASE_URL,
     CONF_BRAVE_API_KEY,
+    CONF_ENABLE_HA_TOOLS,
     CONF_FETCH_TIMEOUT_SECONDS,
+    CONF_HA_ASSISTANT,
+    CONF_HA_LLM_API,
     CONF_LOG_LEVEL,
     CONF_MAX_FETCH_CHARS,
     CONF_MAX_SEARCH_RESULTS,
@@ -42,6 +45,9 @@ class Settings:
     max_fetch_chars: int = 12000
     safe_mode: bool = True
     log_level: str = "info"
+    enable_ha_tools: bool = False
+    ha_llm_api: str = "assist"
+    ha_assistant: str = "conversation"
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "Settings":
@@ -65,6 +71,9 @@ class Settings:
             max_fetch_chars=int(data.get(CONF_MAX_FETCH_CHARS, 12000)),
             safe_mode=bool(data.get(CONF_SAFE_MODE, True)),
             log_level=str(data.get(CONF_LOG_LEVEL, "info")).strip(),
+            enable_ha_tools=bool(data.get(CONF_ENABLE_HA_TOOLS, False)),
+            ha_llm_api=str(data.get(CONF_HA_LLM_API, "assist")).strip() or "assist",
+            ha_assistant=str(data.get(CONF_HA_ASSISTANT, "conversation")).strip() or "conversation",
         )
 
     def safe_summary(self) -> dict[str, Any]:
@@ -85,6 +94,8 @@ class Settings:
             "max_fetch_chars": self.max_fetch_chars,
             "safe_mode": self.safe_mode,
             "log_level": self.log_level,
+            "enable_ha_tools": self.enable_ha_tools,
+            "ha_llm_api": self.ha_llm_api,
+            "ha_assistant": self.ha_assistant,
         }
         return data
-
