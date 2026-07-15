@@ -8,9 +8,9 @@ from homeassistant.core import HomeAssistant
 from .const import VERSION
 from .ha_tools import async_call_ha_tool, async_list_ha_tools
 from .models import Settings
-from .tools import AI_WEB_SEARCH_SCHEMA, FETCH_URL_SCHEMA, WEB_SEARCH_SCHEMA, call_tool
+from .tools import FETCH_URL_SCHEMA, WEB_SEARCH_SCHEMA, call_tool
 
-LOCAL_TOOL_NAMES = {"web_search", "ai_web_search", "fetch_url"}
+LOCAL_TOOL_NAMES = {"web_search", "fetch_url"}
 
 
 def create_mcp_server(hass: HomeAssistant, settings: Settings):
@@ -37,18 +37,6 @@ def create_mcp_server(hass: HomeAssistant, settings: Settings):
                 inputSchema=FETCH_URL_SCHEMA,
             ),
         ]
-        if settings.search_provider == "bocha" and settings.bocha_api_key:
-            tools.insert(
-                1,
-                types.Tool(
-                    name="ai_web_search",
-                    description=(
-                        "高成本 AI 搜索工具。仅在用户明确询问实时股价、涨跌幅、天气、汇率、油价、百科卡、"
-                        "手机/汽车参数等结构化信息时使用。不要用于普通新闻、教程、原因分析。"
-                    ),
-                    inputSchema=AI_WEB_SEARCH_SCHEMA,
-                ),
-            )
         tools.extend(await async_list_ha_tools(hass, settings, types.Tool))
         return tools
 

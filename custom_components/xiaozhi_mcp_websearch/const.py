@@ -1,6 +1,6 @@
 DOMAIN = "xiaozhi_mcp_websearch"
 NAME = "Xiaozhi MCP WebSearch"
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 CONF_XIAOZHI_WS_ENDPOINT = "xiaozhi_ws_endpoint"
 CONF_XIAOZHI_WS_RECONNECT_SECONDS = "xiaozhi_ws_reconnect_seconds"

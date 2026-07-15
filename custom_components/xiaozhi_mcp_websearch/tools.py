@@ -6,22 +6,13 @@ from homeassistant.core import HomeAssistant
 
 from .fetch_url import fetch_url_text
 from .models import Settings
-from .web_search import ai_web_search, search_web
+from .web_search import search_web
 
 
 WEB_SEARCH_SCHEMA = {
     "type": "object",
     "properties": {
         "query": {"type": "string", "description": "Search query."},
-        "count": {"type": "integer", "default": 5, "minimum": 1},
-    },
-    "required": ["query"],
-}
-
-AI_WEB_SEARCH_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string", "description": "Structured realtime search query."},
         "count": {"type": "integer", "default": 5, "minimum": 1},
     },
     "required": ["query"],
@@ -49,13 +40,6 @@ async def call_tool(
             query=str(payload.get("query") or ""),
             count=payload.get("count"),
             language=payload.get("language"),
-            settings=settings,
-        )
-    if name == "ai_web_search":
-        return await ai_web_search(
-            hass=hass,
-            query=str(payload.get("query") or ""),
-            count=payload.get("count"),
             settings=settings,
         )
     if name == "fetch_url":

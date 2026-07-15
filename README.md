@@ -48,10 +48,11 @@ To expose Home Assistant device/control tools to Xiaozhi:
 4. Keep `ha_assistant` as `conversation` unless your exposed entities are scoped to another assistant id.
 5. Restart the integration or Home Assistant Core.
 
-When enabled, the integration dynamically lists tools from Home Assistant's official Assist/LLM API and adds them next to `web_search`, `ai_web_search`, and `fetch_url`.
+When enabled, the integration dynamically lists tools from Home Assistant's official Assist/LLM API and adds them next to `web_search` and `fetch_url`.
 
-## Not supported in v0.3.0
+## Not supported in v0.3.1
 
+- Bocha AI Search and the former `ai_web_search` tool
 - Supervisor API access
 - Inbound standard MCP Streamable HTTP or SSE transport
 - Binary document download, PDF extraction, image/video/archive extraction
