@@ -46,11 +46,13 @@ To expose Home Assistant device/control tools to Xiaozhi:
 2. Enable **Home Assistant tools**.
 3. Keep `ha_llm_api` as `assist` unless your HA instance uses another LLM API id.
 4. Keep `ha_assistant` as `conversation` unless your exposed entities are scoped to another assistant id.
-5. Restart the integration or Home Assistant Core.
+5. In **Settings > Voice assistants > Expose**, expose the entities that Xiaozhi may control. Media, climate,
+   light, fan, cover, and vacuum tools are only generated when matching entities are exposed.
+6. Restart the integration or Home Assistant Core.
 
 When enabled, the integration dynamically lists tools from Home Assistant's official Assist/LLM API and adds them next to `web_search` and `fetch_url`.
 
-## Not supported in v0.3.1
+## Not supported in v0.3.2
 
 - Bocha AI Search and the former `ai_web_search` tool
 - Supervisor API access

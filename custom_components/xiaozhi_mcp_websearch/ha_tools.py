@@ -23,7 +23,7 @@ async def async_list_ha_tools(hass: HomeAssistant, settings: Settings, tool_type
             name = _tool_name(tool)
             if not name:
                 continue
-            input_schema = _convert_tool_schema(tool)
+            input_schema = _convert_tool_schema(tool, api)
             tools.append(
                 tool_type(
                     name=name,
@@ -33,6 +33,7 @@ async def async_list_ha_tools(hass: HomeAssistant, settings: Settings, tool_type
             )
         except Exception as exc:  # pragma: no cover - defensive against HA API shape changes
             _LOGGER.warning("Failed to expose HA LLM tool %s: %s", getattr(tool, "name", "unknown"), exc)
+    _LOGGER.debug("Exposed %s Home Assistant tools: %s", len(tools), [tool.name for tool in tools])
     return tools
 
 
@@ -62,8 +63,8 @@ def _create_llm_context(llm_module: Any, settings: Settings) -> Any:
     llm_context = getattr(llm_module, "LLMContext")
     kwargs = {
         "platform": DOMAIN,
-        "context": None,
-        "language": "zh-CN",
+        "context": {},
+        "language": "*",
         "assistant": settings.ha_assistant or "conversation",
         "device_id": None,
     }
@@ -78,7 +79,7 @@ def _create_llm_context(llm_module: Any, settings: Settings) -> Any:
             return llm_context(**kwargs)
 
 
-def _convert_tool_schema(tool: Any) -> dict[str, Any]:
+def _convert_tool_schema(tool: Any, api: Any) -> dict[str, Any]:
     parameters = getattr(tool, "parameters", None)
     if parameters is None:
         return {"type": "object", "properties": {}}
@@ -86,7 +87,10 @@ def _convert_tool_schema(tool: Any) -> dict[str, Any]:
     try:
         import voluptuous_openapi
 
-        converted = voluptuous_openapi.convert(parameters)
+        converted = voluptuous_openapi.convert(
+            parameters,
+            custom_serializer=getattr(api, "custom_serializer", None),
+        )
         return converted if isinstance(converted, dict) else {"type": "object", "properties": {}}
     except Exception:
         return {"type": "object", "properties": {}}
