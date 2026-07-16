@@ -33,7 +33,7 @@ async def async_list_ha_tools(hass: HomeAssistant, settings: Settings, tool_type
             )
         except Exception as exc:  # pragma: no cover - defensive against HA API shape changes
             _LOGGER.warning("Failed to expose HA LLM tool %s: %s", getattr(tool, "name", "unknown"), exc)
-    _LOGGER.debug("Exposed %s Home Assistant tools: %s", len(tools), [tool.name for tool in tools])
+    _LOGGER.info("Exposed %s Home Assistant tools: %s", len(tools), [tool.name for tool in tools])
     return tools
 
 

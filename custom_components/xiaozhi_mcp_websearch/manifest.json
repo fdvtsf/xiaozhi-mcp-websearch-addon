@@ -3,12 +3,18 @@
   "name": "Xiaozhi MCP WebSearch",
   "codeowners": [],
   "config_flow": true,
+  "dependencies": [
+    "homeassistant",
+    "http",
+    "conversation"
+  ],
   "documentation": "https://github.com/fdvtsf/xiaozhi-mcp-websearch-addon",
+  "integration_type": "service",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/fdvtsf/xiaozhi-mcp-websearch-addon/issues",
   "requirements": [
     "mcp==1.14.1",
     "beautifulsoup4==4.12.3"
   ],
-  "version": "0.3.2"
+  "version": "0.3.3"
 }

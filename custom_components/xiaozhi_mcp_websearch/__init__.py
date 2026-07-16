@@ -5,6 +5,7 @@ import contextlib
 import logging
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -22,12 +23,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Starting Xiaozhi MCP WebSearch integration: %s", sanitize_log_value(settings.safe_summary()))
 
     stop_event = asyncio.Event()
-    task = hass.async_create_task(async_run_forever(hass, settings, stop_event))
-    hass.data[DOMAIN][entry.entry_id] = {
+    runtime = {
         "settings": settings,
         "stop_event": stop_event,
-        "task": task,
+        "task": None,
+        "unsub_start": None,
     }
+    hass.data[DOMAIN][entry.entry_id] = runtime
+
+    async def _async_start(_event=None) -> None:
+        if stop_event.is_set() or runtime["task"] is not None:
+            return
+        runtime["unsub_start"] = None
+        _LOGGER.info("Home Assistant startup complete; starting Xiaozhi MCP connection")
+        runtime["task"] = hass.async_create_task(async_run_forever(hass, settings, stop_event))
+
+    if hass.is_running:
+        await _async_start()
+    else:
+        runtime["unsub_start"] = hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_start)
 
     return True
 
@@ -37,9 +51,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if runtime is None:
         return True
 
+    if runtime["unsub_start"] is not None:
+        runtime["unsub_start"]()
     runtime["stop_event"].set()
-    runtime["task"].cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await runtime["task"]
+    if runtime["task"] is not None:
+        runtime["task"].cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await runtime["task"]
     return True
-

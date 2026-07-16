@@ -52,7 +52,7 @@ To expose Home Assistant device/control tools to Xiaozhi:
 
 When enabled, the integration dynamically lists tools from Home Assistant's official Assist/LLM API and adds them next to `web_search` and `fetch_url`.
 
-## Not supported in v0.3.2
+## Not supported in v0.3.3
 
 - Bocha AI Search and the former `ai_web_search` tool
 - Supervisor API access
